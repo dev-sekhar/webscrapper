@@ -1,17 +1,48 @@
-# Agentic workflows and LLM orchestration
-langchain
-langchain-openai
+# This file lists the required Python packages for the agentic web scraper.
+# To install all dependencies, run: pip install -r requirements.txt
 
-# Web scraping
+# --- Core LangChain Framework ---
+# For agent logic, memory, prompts, and core abstractions.
+langchain
+langchain-core
+langchain-community
+
+# --- LLM & Chat Model Integrations ---
+# For connecting to the fast Llama 3 models hosted on Groq.
+langchain-groq
+
+# For connecting to models on the Hugging Face Hub (e.g., Mixtral).
+langchain-huggingface
+
+# --- Tool Integrations (Search) ---
+# For the Tavily Search API, optimized for AI agents.
+tavily-python
+
+# For the SerpAPI (Google Search) tool.
+google-search-results
+
+# For the Brave Search API (optional, as it was commented out in our final version).
+# langchain-brave-search
+
+# --- Web Scraping Tools ---
+# For parsing HTML and XML documents.
 beautifulsoup4
+
+# For controlling a headless browser to handle JavaScript-heavy sites.
 playwright
 
-# Data modeling and validation
+# For making simple, static HTTP requests.
+requests
+
+# --- Utilities & Data ---
+# For data modeling and validation, used heavily by LangChain.
 pydantic
 
-# Utility (optional, helpful for debugging and runtime config)
+# For loading environment variables from a .env file (API keys, etc.).
 python-dotenv
-rich
 
-# For Playwright — ensure browser binaries are installed after this:
-# Run: python -m playwright install
+# --- Post-Installation Step for Playwright ---
+# After running 'pip install -r requirements.txt', you MUST run this command
+# to download the necessary browser binaries for Playwright.
+#
+# In your terminal, run: python -m playwright install
