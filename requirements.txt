@@ -1,0 +1,17 @@
+# Agentic workflows and LLM orchestration
+langchain
+langchain-openai
+
+# Web scraping
+beautifulsoup4
+playwright
+
+# Data modeling and validation
+pydantic
+
+# Utility (optional, helpful for debugging and runtime config)
+python-dotenv
+rich
+
+# For Playwright — ensure browser binaries are installed after this:
+# Run: python -m playwright install
