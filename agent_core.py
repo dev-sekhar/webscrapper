@@ -12,8 +12,7 @@ from langchain_groq import ChatGroq
 
 from tools.tool_loader import load_all_tools
 
-# Define the supported backends as a literal type for type hinting
-Backend = Literal["huggingface", "groq"]
+# ... (MODEL_CONFIGS dictionary remains the same) ...
 
 # Define model configurations in one place
 MODEL_CONFIGS = {
@@ -23,8 +22,7 @@ MODEL_CONFIGS = {
             "llm": HuggingFaceEndpoint(
                 repo_id="mistralai/Mixtral-8x7B-Instruct-v0.1",
                 task="conversational",
-                huggingfacehub_api_token=os.environ.get(
-                    "HUGGINGFACEHUB_API_TOKEN"),
+                huggingfacehub_api_token=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
                 temperature=0.1,
                 max_new_tokens=1024,
             )
@@ -41,47 +39,52 @@ MODEL_CONFIGS = {
 }
 
 
-def create_agent_executor(backend: Backend) -> AgentExecutor:
+def create_agent_executor(backend: str) -> AgentExecutor:
     """
     A unified factory function to create an agent executor for a specific backend.
-
-    Args:
-        backend: The desired LLM backend, either 'huggingface' or 'groq'.
-
-    Returns:
-        An configured instance of AgentExecutor.
     """
     print(f"🛠️  Building agent with '{backend}' backend...")
 
     if backend not in MODEL_CONFIGS:
-        raise ValueError(
-            f"Unknown backend: {backend}. Supported backends are: {list(MODEL_CONFIGS.keys())}")
+        raise ValueError(f"Unknown backend: {backend}. Supported backends are: {list(MODEL_CONFIGS.keys())}")
 
-    # 1. Load the tools
     tools = load_all_tools()
-
-    # 2. Select and instantiate the chat model based on the backend
     config = MODEL_CONFIGS[backend]
     chat_model_class = config["class"]
     init_args = config["init_args"]
     chat_model = chat_model_class(**init_args)
 
-    # 3. Define the new, more sophisticated system prompt
-    # This guides the agent to be more critical and structured in its reasoning.
+    # A more forceful prompt that encourages a two-step process: Find, then Fetch.
     prompt_template_text = """
-You are a powerful web scraping and research assistant.
-Your goal is to answer the user's request accurately by navigating the web and extracting information.
-Always think step-by-step.
+You are a powerful web research assistant. Your goal is to answer the user's request accurately and with detail.
 
-Here is your workflow:
-1.  **Analyze the Request:** Carefully examine the user's request. Identify key entities, dates, and the core question. Be critical. For example, if a user asks for information from a future date, recognize that it does not exist.
-2.  **Initial Search:** Use a search tool to gather initial information and find relevant URLs. Choose the best search tool for the job.
-3.  **Critique the Search Results:** Look at the search results. Do they *actually* answer the question, or do they just contain the keywords? Check the publication dates and sources of the search results to ensure they are relevant.
-4.  **Follow-Up Actions:** If the initial search is insufficient, decide on a next step. This could be:
-    -   Refining your search query.
-    -   Using a different search tool for a different kind of information (e.g., videos vs. text).
-    -   Using a browsing tool (`fetch_static_content` or `browse_dynamic_page`) to visit a promising URL from the search results to get more detail.
-5.  **Synthesize and Answer:** Once you have gathered enough information from one or more steps, formulate a final, comprehensive answer. If you absolutely cannot find the information after trying multiple steps, state that clearly and explain why (e.g., "The financial year 2025-2026 has not occurred yet, so no news has been published within that period.").
+**Your process MUST follow these two distinct steps:**
+
+**Step 1: Find Relevant Sources**
+- Use a search tool (`tavily_search_engine` or `google_serp_search`) to find a list of relevant URLs.
+- Analyze the search results to identify the most promising URLs.
+
+**Step 2: Fetch and Extract Detailed Information**
+- Once you have identified one or more good URLs from your search, you MUST use a browsing tool (`fetch_static_content` or `browse_dynamic_page`) to visit those URLs.
+- Read the full content from the webpages.
+- Do NOT answer based only on the search result summaries. You must visit the pages to get the real details.
+
+**Final Answer Formulation:**
+- After visiting the pages, synthesize all the information you have gathered into a comprehensive final answer.
+- Cite your sources by including the URLs you visited.
+- If you cannot find the information after searching and browsing, state that clearly.
+
+**Example Thought Process:**
+Thought: The user wants the latest news about Company X. First, I need to find news articles. I will use a search tool.
+Action: tavily_search_engine
+Action Input: "latest news Company X"
+Observation: [List of search results with URLs]
+Thought: The search results provided several promising URLs. The first one, 'https://www.news.com/article1', looks most relevant. I must now visit this URL to get the full story.
+Action: fetch_static_content
+Action Input: "https://www.news.com/article1"
+Observation: [Full text content of the article]
+Thought: I have read the full article. It contains the details I need to answer the user's question. I will now formulate my final answer.
+Final Answer: According to an article from news.com, the latest news about Company X is... (Source: https://www.news.com/article1)
 
 You have access to the following tools:
 {tools}
@@ -89,6 +92,7 @@ You have access to the following tools:
 Use the following format for your thought process:
 
 Question: the input question you must answer
+{chat_history}
 Thought: you should always think about what to do
 Action: the action to take, should be one of [{tool_names}]
 Action Input: the input to the action
@@ -98,20 +102,13 @@ Thought: I now know the final answer
 Final Answer: the final answer to the original input question
 """
 
-    # 4. Pull the base prompt and inject our custom template
-    # We use .partial() to insert our detailed instructions into the base prompt from the hub.
     prompt = hub.pull("hwchase17/react-chat").partial(
         instructions=prompt_template_text
     )
 
-    # 5. Create the agent runnable
     agent = create_react_agent(chat_model, tools, prompt)
+    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
-    # 6. Create the memory
-    memory = ConversationBufferMemory(
-        memory_key="chat_history", return_messages=True)
-
-    # 7. Create and return the Agent Executor
     return AgentExecutor(
         agent=agent,
         tools=tools,
